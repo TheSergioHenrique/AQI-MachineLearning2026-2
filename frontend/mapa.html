@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Previsão da Qualidade do Ar :: Mapa</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-pagina="mapa">
+<div id="pagina">
+  <div id="topo"></div>
+
+  <div id="conteudo">
+    <div id="lateral"></div>
+
+    <div id="principal">
+      <h1 class="titulo-pagina">Mapa da Qualidade do Ar</h1>
+      <p class="subtitulo">AQI das 26 cidades monitoradas. Clique em um marcador para ver os detalhes.</p>
+
+      <form id="filtros">
+        <fieldset>
+          <legend>Exibição</legend>
+          <label for="data">Data de referência:</label>
+          <input type="date" id="data">
+          <label>Mostrar:</label>
+          <label class="opcao"><input type="radio" name="modo" value="aqi_previsto" checked> Previsão (amanhã)</label>
+          <label class="opcao"><input type="radio" name="modo" value="aqi_atual"> Medido (hoje)</label>
+          <input type="submit" class="botao" value="Atualizar">
+        </fieldset>
+      </form>
+
+      <div id="mapa"></div>
+      <div id="resultado"><div class="carregando">Carregando...</div></div>
+    </div>
+  </div>
+
+  <div id="rodape-ph"></div>
+</div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="js/mapa-dados.js"></script>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/comum.js"></script>
+<script src="js/layout.js"></script>
+<script>
+(function () {
+  var inpData = document.getElementById('data');
+  var alvo = document.getElementById('resultado');
+  inpData.min = Util.DATA_MIN;
+  inpData.max = Util.DATA_MAX;
+  inpData.value = Util.param('data') || Util.DATA_MAX;
+
+  var mapa = L.map('mapa', { scrollWheelZoom: false, zoomSnap: 0.25 });
+  var pontos = Object.keys(AQI.COORDENADAS).map(function (c) { return AQI.COORDENADAS[c]; });
+  mapa.fitBounds(pontos, { padding: [20, 20] });
+  mapa.setMinZoom(4); mapa.setMaxZoom(8);
+  L.geoJSON(MAPA_PAISES, {
+    interactive: false,
+    style: function (f) {
+      return f.properties.india
+        ? { color: '#7a6a3a', weight: 1.5, fillColor: '#f6f0d8', fillOpacity: 1 }
+        : { color: '#a0a0a0', weight: 1, fillColor: '#e2e2dc', fillOpacity: 1 };
+    }
+  }).addTo(mapa);
+  mapa.attributionControl.addAttribution('Contornos: Natural Earth');
+
+  var legenda = L.control({ position: 'bottomright' });
+  legenda.onAdd = function () {
+    var div = L.DomUtil.create('div', 'legenda-mapa');
+    div.innerHTML = '<b>AQI</b>' + AQI.FAIXAS.map(function (f, i) {
+      var min = i === 0 ? 0 : AQI.FAIXAS[i - 1].max + 1;
+      return '<i style="background:' + f.cor + '"></i>' + f.nome + ' (' + (f.max === Infinity ? min + '+' : min + '&ndash;' + f.max) + ')';
+    }).join('<br>');
+    return div;
+  };
+  legenda.addTo(mapa);
+
+  var camada = L.layerGroup().addTo(mapa);
+  var ROTULO_ESQ = { Gurugram: 1, Bengaluru: 1, Ernakulam: 1, Kochi: 1, Brajrajnagar: 1, Thiruvananthapuram: 1 };
+
+  function modo() {
+    return document.querySelector('input[name=modo]:checked').value;
+  }
+
+  function consulta() {
+    var data = inpData.value, campo = modo();
+    alvo.innerHTML = '<div class="carregando">Carregando cidades...</div>';
+
+    AQI.mapa(data).then(function (lista) {
+      camada.clearLayers();
+      var amanha = new Date(data + 'T12:00:00'); amanha.setDate(amanha.getDate() + 1);
+      var dataAmanha = amanha.toISOString().substr(0, 10);
+
+      lista.forEach(function (c) {
+        var pos = AQI.COORDENADAS[c.cidade];
+        if (!pos) return;
+        var valor = c[campo], f = AQI.faixa(valor);
+        var icone = L.divIcon({
+          className: '',
+          html: '<div class="marcador-aqi" style="width:32px;height:32px;line-height:28px;background:' + f.cor + ';color:' + f.texto + '">' + valor + '</div>',
+          iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -14]
+        });
+        L.marker(pos, { icon: icone, title: c.cidade, riseOnHover: true })
+          .bindPopup(
+            '<h4>' + c.cidade + '</h4>' +
+            'Hoje (' + Util.formataData(data) + '): <b>' + c.aqi_atual + '</b> ' + Util.selo(c.aqi_atual) + '<br>' +
+            'Amanhã (' + Util.formataData(dataAmanha) + '): <b>' + c.aqi_previsto + '</b> ' + Util.selo(c.aqi_previsto) + '<br><br>' +
+            '<a href="index.html?cidade=' + encodeURIComponent(c.cidade) + '&data=' + data + '">Ver previsão detalhada &raquo;</a>')
+          .bindTooltip(c.cidade, {
+            permanent: true, className: 'rotulo-cidade',
+            direction: ROTULO_ESQ[c.cidade] ? 'left' : 'right',
+            offset: ROTULO_ESQ[c.cidade] ? [-14, 0] : [14, 0]
+          })
+          .addTo(camada);
+      });
+
+      var ord = lista.slice().sort(function (a, b) { return b[campo] - a[campo]; });
+      var html = '<h2>Ranking das cidades &mdash; ' + (campo === 'aqi_previsto' ? 'previsão para ' + Util.formataData(dataAmanha) : 'medido em ' + Util.formataData(data)) + '</h2>' +
+        '<table class="dados"><tr><th>#</th><th>Cidade</th><th>AQI hoje</th><th>AQI amanhã</th><th>Categoria</th></tr>';
+      ord.forEach(function (c, i) {
+        html += '<tr><td class="num">' + (i + 1) + '</td><td><a href="index.html?cidade=' + encodeURIComponent(c.cidade) + '&data=' + data + '">' + c.cidade + '</a></td>' +
+          '<td class="num">' + c.aqi_atual + '</td><td class="num">' + c.aqi_previsto + '</td><td>' + Util.selo(c[campo]) + '</td></tr>';
+      });
+      alvo.innerHTML = html + '</table>';
+    }).catch(function (e) { Util.erro(alvo, e); });
+  }
+
+  document.getElementById('filtros').onsubmit = function (e) { e.preventDefault(); consulta(); };
+  Array.prototype.forEach.call(document.querySelectorAll('input[name=modo]'), function (r) { r.onchange = consulta; });
+  consulta();
+})();
+</script>
+</body>
+</html>

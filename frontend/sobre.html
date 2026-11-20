@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Previsão da Qualidade do Ar :: Sobre o Projeto</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-pagina="sobre">
+<div id="pagina">
+  <div id="topo"></div>
+
+  <div id="conteudo">
+    <div id="lateral"></div>
+
+    <div id="principal">
+      <h1 class="titulo-pagina">Sobre o Projeto</h1>
+      <p class="subtitulo">Projeto acadêmico de Machine Learning &mdash; Grupo 7.</p>
+
+      <h2>Pergunta principal</h2>
+      <p><i>"Conseguimos prever a qualidade do ar do dia seguinte usando o histórico de poluentes de uma cidade e o seu calendário?"</i></p>
+
+      <h2>Base de dados</h2>
+      <p>Utilizamos a tabela <b>city_day</b> do dataset <a href="https://www.kaggle.com/datasets/rohanrao/air-quality-data-in-india" target="_blank">Air Quality Data in India (2015&ndash;2020)</a>,
+      com 29.531 linhas e 16 colunas. Cada linha é a medição média diária de uma cidade indiana em uma data, com a concentração de 12 poluentes, o AQI e sua categoria.</p>
+
+      <h2>Metodologia</h2>
+      <table class="dados">
+        <tr><th style="width:170px">Etapa</th><th>Decisão</th></tr>
+        <tr><td>Variável-alvo</td><td>AQI do dia seguinte (regressão), obtido deslocando a coluna AQI em um dia para cada cidade.</td></tr>
+        <tr><td>Entradas</td><td>Poluentes do dia (PM2.5, PM10, NO, NO2, NOx, NH3, CO, SO2, O3, Benzeno, Tolueno), AQI atual, cidade, mês e dia da semana.</td></tr>
+        <tr><td>Colunas removidas</td><td>AQI_Bucket (vazamento de dados), Xileno (61% ausente) e a Date original.</td></tr>
+        <tr><td>Divisão treino/teste</td><td>Por data, nunca aleatória, para respeitar a ordem temporal.</td></tr>
+        <tr><td>Valores ausentes</td><td>Preenchidos com o valor do dia anterior da mesma cidade, depois da divisão.</td></tr>
+        <tr><td>Pré-processamento</td><td>One-Hot Encoding da cidade, padronização das variáveis numéricas e teste de transformação logarítmica no AQI.</td></tr>
+        <tr><td>Modelos</td><td>Regressão Linear, KNN Regressor, Árvore de Regressão e SVR, comparados com o baseline "amanhã = hoje".</td></tr>
+        <tr><td>Métricas</td><td>MAE e RMSE.</td></tr>
+      </table>
+
+      <h2>Principais achados da exploração</h2>
+      <ul>
+        <li>Somente 21,5% das linhas têm todos os poluentes preenchidos.</li>
+        <li>PM10 (0,80), CO (0,68) e PM2.5 (0,66) são os mais correlacionados com o AQI.</li>
+        <li>O AQI de hoje tem correlação de 0,87 com o de amanhã.</li>
+        <li>Forte sazonalidade: 69% dos outliers de PM2.5 ocorrem entre novembro e janeiro (smog de inverno).</li>
+        <li>Ahmedabad apresenta valores suspeitos de erro de medição (AQI acima de 500).</li>
+      </ul>
+
+      <h2 id="modelos">Desempenho dos modelos</h2>
+      <p>Comparação dos algoritmos no conjunto de teste (separado por data).</p>
+      <div id="tabela-modelos"><div class="carregando">Carregando...</div></div>
+      <ul>
+        <li><b>MAE</b> (Erro Absoluto Médio): em média, quantos pontos de AQI a previsão erra. Quanto menor, melhor.</li>
+        <li><b>RMSE</b> (Raiz do Erro Quadrático Médio): penaliza mais os erros grandes, como nos dias de poluição extrema.</li>
+        <li><b>Baseline</b>: a regra simples "o AQI de amanhã será igual ao de hoje". Um modelo só vale a pena se for melhor que ela.</li>
+      </ul>
+
+      <h2 id="escala">Escala do AQI</h2>
+      <p>O <b>AQI</b> (Air Quality Index) resume, em um único número, a concentração de vários poluentes no ar.
+      Quanto maior o valor, pior a qualidade do ar. As faixas abaixo são as oficiais da Índia (CPCB).</p>
+      <table class="dados" id="tabela-escala">
+        <tr><th>Faixa</th><th>Categoria</th><th>Possíveis efeitos à saúde</th></tr>
+      </table>
+
+      <h2>Poluentes considerados</h2>
+      <table class="dados">
+        <tr><th>Sigla</th><th>Nome</th><th>Unidade</th></tr>
+        <tr><td>PM2.5</td><td>Material particulado fino (&lt; 2,5 &micro;m)</td><td>&micro;g/m&sup3;</td></tr>
+        <tr><td>PM10</td><td>Material particulado inalável (&lt; 10 &micro;m)</td><td>&micro;g/m&sup3;</td></tr>
+        <tr><td>NO / NO2 / NOx</td><td>Óxidos de nitrogênio</td><td>&micro;g/m&sup3;</td></tr>
+        <tr><td>NH3</td><td>Amônia</td><td>&micro;g/m&sup3;</td></tr>
+        <tr><td>CO</td><td>Monóxido de carbono</td><td>mg/m&sup3;</td></tr>
+        <tr><td>SO2</td><td>Dióxido de enxofre</td><td>&micro;g/m&sup3;</td></tr>
+        <tr><td>O3</td><td>Ozônio</td><td>&micro;g/m&sup3;</td></tr>
+        <tr><td>Benzene / Toluene</td><td>Benzeno e Tolueno</td><td>&micro;g/m&sup3;</td></tr>
+      </table>
+
+      <h2>Equipe</h2>
+      <p>Sergio Henrique, Maria Luisa, Arthur Pontes, Sofia Queiroz e Julia Rodrigues.</p>
+    </div>
+  </div>
+
+  <div id="rodape-ph"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/comum.js"></script>
+<script src="js/layout.js"></script>
+<script>
+(function () {
+  var t = document.getElementById('tabela-escala');
+  AQI.FAIXAS.forEach(function (f, i) {
+    var min = i === 0 ? 0 : AQI.FAIXAS[i - 1].max + 1;
+    var faixa = f.max === Infinity ? min + ' a 500' : min + ' a ' + f.max;
+    t.insertAdjacentHTML('beforeend', '<tr><td class="num">' + faixa + '</td><td>' + Util.selo(min) + '</td><td>' + f.saude + '</td></tr>');
+  });
+
+  var alvo = document.getElementById('tabela-modelos');
+  AQI.modelos().then(function (lista) {
+    var melhor = lista.reduce(function (a, b) { return b.mae < a.mae ? b : a; });
+    var base = lista.filter(function (m) { return /baseline/i.test(m.modelo); })[0];
+    var html = '<table class="dados"><tr><th>Modelo</th><th>MAE</th><th>RMSE</th>' + (base ? '<th>Ganho sobre o baseline</th>' : '') + '</tr>';
+    lista.forEach(function (m) {
+      html += '<tr' + (m === melhor ? ' class="melhor"' : '') + '><td>' + m.modelo + (m === melhor ? ' &#9733;' : '') + '</td>' +
+        '<td class="num">' + m.mae.toFixed(2) + '</td><td class="num">' + m.rmse.toFixed(2) + '</td>' +
+        (base ? '<td class="num">' + (m === base ? '&ndash;' : ((1 - m.mae / base.mae) * 100).toFixed(1) + '%') + '</td>' : '') + '</tr>';
+    });
+    alvo.innerHTML = html + '</table><p class="pequeno">&#9733; Modelo com menor MAE, usado nas previsões do site.</p>';
+  }).catch(function (e) { Util.erro(alvo, e); });
+})();
+</script>
+</body>
+</html>

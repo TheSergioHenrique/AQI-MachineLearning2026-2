@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Previsão da Qualidade do Ar :: Início</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-pagina="previsao">
+<div id="pagina">
+  <div id="topo"></div>
+
+  <div id="conteudo">
+    <div id="lateral"></div>
+
+    <div id="principal">
+      <h1 class="titulo-pagina">Previsão do AQI para o Dia Seguinte</h1>
+      <p class="subtitulo">Escolha a cidade e a data de referência. O modelo usa os poluentes do dia, o AQI atual, a cidade e o calendário para estimar o AQI de amanhã.</p>
+
+      <form id="filtros">
+        <fieldset>
+          <legend>Consulta</legend>
+          <label for="cidade">Cidade:</label>
+          <select id="cidade"></select>
+          <label for="data">Data:</label>
+          <input type="date" id="data">
+          <label for="dias">Histórico:</label>
+          <select id="dias">
+            <option value="7">7 dias</option>
+            <option value="30" selected>30 dias</option>
+            <option value="60">60 dias</option>
+            <option value="90">90 dias</option>
+          </select>
+          <input type="submit" class="botao" value="Consultar">
+        </fieldset>
+      </form>
+
+      <div id="resultado"><div class="carregando">Carregando...</div></div>
+    </div>
+  </div>
+
+  <div id="rodape-ph"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/comum.js"></script>
+<script src="js/layout.js"></script>
+<script>
+(function () {
+  var selCidade = document.getElementById('cidade');
+  var inpData = document.getElementById('data');
+  var selDias = document.getElementById('dias');
+  var alvo = document.getElementById('resultado');
+
+  function painel(titulo, data, aqi, classe, rodape) {
+    var f = AQI.faixa(aqi);
+    return '<div class="painel ' + (classe || '') + '">' +
+      '<div class="cab">' + titulo + '<span>' + Util.formataData(data) + '</span></div>' +
+      '<div class="valor"><div class="numero" style="color:' + (f.cor === '#f2e600' ? '#b3a600' : f.cor) + '">' + aqi + '</div>' +
+      '<div class="categoria" style="background:' + f.cor + ';color:' + f.texto + '">' + f.nome + '</div></div>' +
+      '<div class="rodape">' + rodape + '</div></div>';
+  }
+
+  function grafico(lista) {
+    var L = 680, A = 240, mE = 40, mB = 30, mT = 10;
+    var maxAqi = Math.max.apply(null, lista.map(function (d) { return d.aqi; }));
+    var topo = Math.max(100, Math.ceil(maxAqi / 100) * 100);
+    var w = (L - mE - 10) / lista.length;
+    var y = function (v) { return mT + (A - mT - mB) * (1 - v / topo); };
+    var s = '<svg width="' + L + '" height="' + A + '" font-family="Verdana" font-size="10">';
+
+    for (var g = 0; g <= topo; g += topo / 5) {
+      s += '<line x1="' + mE + '" x2="' + (L - 10) + '" y1="' + y(g) + '" y2="' + y(g) + '" stroke="#e3e3e3"/>' +
+           '<text x="' + (mE - 5) + '" y="' + (y(g) + 3) + '" text-anchor="end" fill="#666">' + g + '</text>';
+    }
+    lista.forEach(function (d, i) {
+      var f = AQI.faixa(d.aqi);
+      var x = mE + i * w;
+      s += '<rect x="' + (x + 1) + '" y="' + y(d.aqi) + '" width="' + Math.max(1, w - 2) + '" height="' + (y(0) - y(d.aqi)) +
+           '" fill="' + f.cor + '" stroke="#555" stroke-width="0.5"><title>' + Util.formataData(d.data) + ': ' + d.aqi + ' (' + f.nome + ')</title></rect>';
+      if (i % Math.ceil(lista.length / 8) === 0) {
+        s += '<text x="' + (x + w / 2) + '" y="' + (A - mB + 14) + '" text-anchor="middle" fill="#666">' + Util.formataData(d.data).substr(0, 5) + '</text>';
+      }
+    });
+    s += '<line x1="' + mE + '" x2="' + (L - 10) + '" y1="' + y(0) + '" y2="' + y(0) + '" stroke="#555"/></svg>';
+    return '<div id="grafico">' + s + '</div>';
+  }
+
+  function consulta() {
+    var cidade = selCidade.value, data = inpData.value, dias = parseInt(selDias.value, 10);
+    alvo.innerHTML = '<div class="carregando">Consultando previsão para ' + cidade + '...</div>';
+
+    Promise.all([AQI.previsao(cidade, data), AQI.historico(cidade, data, dias)]).then(function (r) {
+      var p = r[0], hist = r[1];
+      var dif = p.aqi_previsto - p.aqi_atual;
+      var tend = dif > 0
+        ? '<span class="tendencia sobe">&#9650; +' + dif + '</span> em relação a hoje'
+        : dif < 0
+          ? '<span class="tendencia desce">&#9660; ' + dif + '</span> em relação a hoje'
+          : 'Sem variação em relação a hoje';
+      var fAmanha = AQI.faixa(p.aqi_previsto);
+
+      var html = '<h2>' + p.cidade + '</h2>' +
+        '<div class="paineis">' +
+          painel('AQI medido', p.data_base, p.aqi_atual, '', 'Valor observado na data de referência.') +
+          painel('AQI previsto (amanhã)', p.data_prevista, p.aqi_previsto, 'destaque',
+            tend + '<br>Modelo: <b>' + p.modelo + '</b>' +
+            (p.mae_modelo ? ' &middot; erro médio (MAE) &plusmn;' + p.mae_modelo : '')) +
+        '</div>' +
+        '<div class="aviso"><b>Recomendação para ' + Util.formataData(p.data_prevista) + ':</b> ' + fAmanha.saude + '</div>';
+
+      var valores = hist.map(function (d) { return d.aqi; });
+      var media = Math.round(valores.reduce(function (a, b) { return a + b; }, 0) / valores.length);
+      html += '<h2>Histórico &mdash; ' + Util.formataData(hist[0].data) + ' a ' + Util.formataData(hist[hist.length - 1].data) + '</h2>' +
+        grafico(hist) +
+        '<table class="dados"><tr><th>Média do período</th><th>Mínimo</th><th>Máximo</th><th>Dias acima de 200</th></tr>' +
+        '<tr><td class="num">' + media + ' ' + Util.selo(media) + '</td>' +
+        '<td class="num">' + Math.min.apply(null, valores) + '</td>' +
+        '<td class="num">' + Math.max.apply(null, valores) + '</td>' +
+        '<td class="num">' + valores.filter(function (v) { return v > 200; }).length + '</td></tr></table>';
+
+      html += '<h2>Poluentes medidos em ' + Util.formataData(p.data_base) + '</h2>' +
+        '<table class="dados"><tr><th>Poluente</th><th>Concentração</th><th>Unidade</th></tr>';
+      Object.keys(p.poluentes).forEach(function (k) {
+        var v = p.poluentes[k];
+        html += '<tr><td>' + k + '</td><td class="num">' + (v === null ? '&ndash;' : v.toFixed(2)) + '</td><td>' +
+          (k === 'CO' ? 'mg/m&sup3;' : '&micro;g/m&sup3;') + '</td></tr>';
+      });
+      html += '</table>';
+
+      html += '<h2>Registros diários</h2><table class="dados"><tr><th>Data</th><th>AQI</th><th>Categoria</th></tr>';
+      hist.slice().reverse().forEach(function (d) {
+        html += '<tr><td>' + Util.formataData(d.data) + '</td><td class="num">' + d.aqi + '</td><td>' + Util.selo(d.aqi) + '</td></tr>';
+      });
+      alvo.innerHTML = html + '</table>';
+    }).catch(function (e) { Util.erro(alvo, e); });
+  }
+
+  document.getElementById('filtros').onsubmit = function (e) { e.preventDefault(); consulta(); };
+  Util.preparaFiltros(selCidade, inpData, consulta).catch(function (e) { Util.erro(alvo, e); });
+})();
+</script>
+</body>
+</html>
