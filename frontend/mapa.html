@@ -15,7 +15,7 @@
 
     <div id="principal">
       <h1 class="titulo-pagina">Mapa da Qualidade do Ar</h1>
-      <p class="subtitulo">AQI das 26 cidades monitoradas. Clique em um marcador para ver os detalhes.</p>
+      <p class="subtitulo">Qualidade do ar nas 26 cidades monitoradas. Clique em um marcador para ver os detalhes.</p>
 
       <form id="filtros">
         <fieldset>
@@ -23,8 +23,8 @@
           <label for="data">Data de referência:</label>
           <input type="date" id="data">
           <label>Mostrar:</label>
-          <label class="opcao"><input type="radio" name="modo" value="aqi_previsto" checked> Previsão (amanhã)</label>
-          <label class="opcao"><input type="radio" name="modo" value="aqi_atual"> Medido (hoje)</label>
+          <label class="opcao"><input type="radio" name="modo" value="previsao" checked> Previsão (amanhã)</label>
+          <label class="opcao"><input type="radio" name="modo" value="medido"> Medido (hoje)</label>
           <input type="submit" class="botao" value="Atualizar">
         </fieldset>
       </form>
@@ -47,9 +47,6 @@
 (function () {
   var inpData = document.getElementById('data');
   var alvo = document.getElementById('resultado');
-  inpData.min = Util.DATA_MIN;
-  inpData.max = Util.DATA_MAX;
-  inpData.value = Util.param('data') || Util.DATA_MAX;
 
   var mapa = L.map('mapa', { scrollWheelZoom: false, zoomSnap: 0.25 });
   var pontos = Object.keys(AQI.COORDENADAS).map(function (c) { return AQI.COORDENADAS[c]; });
@@ -68,10 +65,10 @@
   var legenda = L.control({ position: 'bottomright' });
   legenda.onAdd = function () {
     var div = L.DomUtil.create('div', 'legenda-mapa');
-    div.innerHTML = '<b>AQI</b>' + AQI.FAIXAS.map(function (f, i) {
-      var min = i === 0 ? 0 : AQI.FAIXAS[i - 1].max + 1;
-      return '<i style="background:' + f.cor + '"></i>' + f.nome + ' (' + (f.max === Infinity ? min + '+' : min + '&ndash;' + f.max) + ')';
-    }).join('<br>');
+    div.innerHTML = '<b>Categoria do AQI</b>' + AQI.FAIXAS.map(function (f) {
+      return '<i style="background:' + f.cor + '"></i>' + f.nome;
+    }).join('<br>') + '<br><i style="background:#ccc"></i>Sem dados' +
+      '<br><br>&#9650; deve piorar<br>&#9660; deve melhorar<br>= deve se manter';
     return div;
   };
   legenda.addTo(mapa);
@@ -83,29 +80,39 @@
     return document.querySelector('input[name=modo]:checked').value;
   }
 
+  function seta(c) {
+    if (c.categoria_prevista === null || c.categoria_atual === null) return '?';
+    var d = c.categoria_prevista - c.categoria_atual;
+    return d > 0 ? '&#9650;' : d < 0 ? '&#9660;' : '=';
+  }
+
+  function nivel(v) {
+    return v === null ? -1 : v;
+  }
+
   function consulta() {
-    var data = inpData.value, campo = modo();
+    var data = inpData.value, previsao = modo() === 'previsao';
+    var dataAmanha = Util.diaSeguinte(data);
     alvo.innerHTML = '<div class="carregando">Carregando cidades...</div>';
 
     AQI.mapa(data).then(function (lista) {
       camada.clearLayers();
-      var amanha = new Date(data + 'T12:00:00'); amanha.setDate(amanha.getDate() + 1);
-      var dataAmanha = amanha.toISOString().substr(0, 10);
 
       lista.forEach(function (c) {
         var pos = AQI.COORDENADAS[c.cidade];
         if (!pos) return;
-        var valor = c[campo], f = AQI.faixa(valor);
+        var f = Util.faixa(previsao ? c.categoria_prevista : c.categoria_atual) || { cor: '#ccc', texto: '#555' };
+        var texto = previsao ? seta(c) : c.aqi_atual === null ? '?' : Math.round(c.aqi_atual);
         var icone = L.divIcon({
           className: '',
-          html: '<div class="marcador-aqi" style="width:32px;height:32px;line-height:28px;background:' + f.cor + ';color:' + f.texto + '">' + valor + '</div>',
+          html: '<div class="marcador-aqi" style="width:32px;height:32px;line-height:28px;background:' + f.cor + ';color:' + f.texto + '">' + texto + '</div>',
           iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -14]
         });
         L.marker(pos, { icon: icone, title: c.cidade, riseOnHover: true })
           .bindPopup(
             '<h4>' + c.cidade + '</h4>' +
-            'Hoje (' + Util.formataData(data) + '): <b>' + c.aqi_atual + '</b> ' + Util.selo(c.aqi_atual) + '<br>' +
-            'Amanhã (' + Util.formataData(dataAmanha) + '): <b>' + c.aqi_previsto + '</b> ' + Util.selo(c.aqi_previsto) + '<br><br>' +
+            'Hoje (' + Util.formataData(data) + '): <b>' + Util.numero(c.aqi_atual) + '</b> ' + Util.selo(c.categoria_atual) + '<br>' +
+            'Amanhã (' + Util.formataData(dataAmanha) + '): ' + Util.selo(c.categoria_prevista) + '<br><br>' +
             '<a href="index.html?cidade=' + encodeURIComponent(c.cidade) + '&data=' + data + '">Ver previsão detalhada &raquo;</a>')
           .bindTooltip(c.cidade, {
             permanent: true, className: 'rotulo-cidade',
@@ -115,12 +122,16 @@
           .addTo(camada);
       });
 
-      var ord = lista.slice().sort(function (a, b) { return b[campo] - a[campo]; });
-      var html = '<h2>Ranking das cidades &mdash; ' + (campo === 'aqi_previsto' ? 'previsão para ' + Util.formataData(dataAmanha) : 'medido em ' + Util.formataData(data)) + '</h2>' +
-        '<table class="dados"><tr><th>#</th><th>Cidade</th><th>AQI hoje</th><th>AQI amanhã</th><th>Categoria</th></tr>';
+      var ord = lista.slice().sort(function (a, b) {
+        var pa = previsao ? nivel(a.categoria_prevista) : nivel(a.categoria_atual);
+        var pb = previsao ? nivel(b.categoria_prevista) : nivel(b.categoria_atual);
+        return pb - pa || nivel(b.aqi_atual) - nivel(a.aqi_atual);
+      });
+      var html = '<h2>Ranking das cidades (' + (previsao ? 'previsão para ' + Util.formataData(dataAmanha) : 'medido em ' + Util.formataData(data)) + ')</h2>' +
+        '<table class="dados"><tr><th>#</th><th>Cidade</th><th>AQI hoje</th><th>Categoria hoje</th><th>Previsão amanhã</th></tr>';
       ord.forEach(function (c, i) {
         html += '<tr><td class="num">' + (i + 1) + '</td><td><a href="index.html?cidade=' + encodeURIComponent(c.cidade) + '&data=' + data + '">' + c.cidade + '</a></td>' +
-          '<td class="num">' + c.aqi_atual + '</td><td class="num">' + c.aqi_previsto + '</td><td>' + Util.selo(c[campo]) + '</td></tr>';
+          '<td class="num">' + Util.numero(c.aqi_atual) + '</td><td>' + Util.selo(c.categoria_atual) + '</td><td>' + Util.selo(c.categoria_prevista) + '</td></tr>';
       });
       alvo.innerHTML = html + '</table>';
     }).catch(function (e) { Util.erro(alvo, e); });
@@ -128,7 +139,7 @@
 
   document.getElementById('filtros').onsubmit = function (e) { e.preventDefault(); consulta(); };
   Array.prototype.forEach.call(document.querySelectorAll('input[name=modo]'), function (r) { r.onchange = consulta; });
-  consulta();
+  Util.preparaData(inpData).then(consulta).catch(function (e) { Util.erro(alvo, e); });
 })();
 </script>
 </body>

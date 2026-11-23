@@ -13,8 +13,8 @@
     <div id="lateral"></div>
 
     <div id="principal">
-      <h1 class="titulo-pagina">Previsão do AQI para o Dia Seguinte</h1>
-      <p class="subtitulo">Escolha a cidade e a data de referência. O modelo usa os poluentes do dia, o AQI atual, a cidade e o calendário para estimar o AQI de amanhã.</p>
+      <h1 class="titulo-pagina">Previsão da Qualidade do Ar para o Dia Seguinte</h1>
+      <p class="subtitulo">Escolha a cidade e a data de referência. O modelo usa os poluentes de hoje e dos últimos dias, a categoria do AQI de hoje e de ontem, a cidade e o mês para prever a categoria do AQI de amanhã.</p>
 
       <form id="filtros">
         <fieldset>
@@ -51,19 +51,60 @@
   var inpData = document.getElementById('data');
   var selDias = document.getElementById('dias');
   var alvo = document.getElementById('resultado');
+  var NOME_CONJUNTO = { treino: 'treino', 'validação': 'validação', teste: 'teste' };
 
-  function painel(titulo, data, aqi, classe, rodape) {
-    var f = AQI.faixa(aqi);
-    return '<div class="painel ' + (classe || '') + '">' +
-      '<div class="cab">' + titulo + '<span>' + Util.formataData(data) + '</span></div>' +
-      '<div class="valor"><div class="numero" style="color:' + (f.cor === '#f2e600' ? '#b3a600' : f.cor) + '">' + aqi + '</div>' +
-      '<div class="categoria" style="background:' + f.cor + ';color:' + f.texto + '">' + f.nome + '</div></div>' +
-      '<div class="rodape">' + rodape + '</div></div>';
+  function cabecalho(titulo, data, classe) {
+    return '<div class="painel ' + (classe || '') + '"><div class="cab">' + titulo + '<span>' + Util.formataData(data) + '</span></div>';
+  }
+
+  function painelHoje(p) {
+    var f = Util.faixa(p.categoria_atual);
+    var corpo = f
+      ? '<div class="numero" style="color:' + (f.cor === '#f2e600' ? '#b3a600' : f.cor) + '">' + Util.numero(p.aqi_atual) + '</div>' +
+        '<div class="categoria" style="background:' + f.cor + ';color:' + f.texto + '">' + f.nome + '</div>'
+      : '<div class="sem-valor">Sem medição de AQI nesta data</div>';
+    return cabecalho('Hoje (medido)', p.data_base) +
+      '<div class="valor">' + corpo + '</div>' +
+      '<div class="rodape">AQI e categoria observados na data de referência.</div></div>';
+  }
+
+  function barras(probs, escolhida) {
+    return '<table class="probs">' + AQI.FAIXAS.map(function (f, i) {
+      var pct = Math.round(probs[i] * 100);
+      return '<tr' + (i === escolhida ? ' class="max"' : '') + '><td class="rot">' + f.nome + '</td>' +
+        '<td><div class="barra" style="width:' + Math.max(pct, 0.5) + '%;background:' + f.cor + '"></div></td>' +
+        '<td class="pct">' + pct + '%</td></tr>';
+    }).join('') + '</table>';
+  }
+
+  function painelAmanha(p) {
+    var f = Util.faixa(p.categoria_prevista);
+    if (!f) {
+      return cabecalho('Amanhã (previsão)', p.data_prevista, 'destaque') +
+        '<div class="valor"><div class="sem-valor">Sem previsão: o modelo precisa da categoria do AQI de hoje.</div></div></div>';
+    }
+    var dif = p.categoria_atual === null ? null : p.categoria_prevista - p.categoria_atual;
+    var tend = dif === null ? ''
+      : dif > 0 ? '<span class="tendencia sobe">&#9650; Deve piorar</span> em relação a hoje'
+      : dif < 0 ? '<span class="tendencia desce">&#9660; Deve melhorar</span> em relação a hoje'
+      : 'Deve se manter na mesma categoria de hoje';
+    var confere = '';
+    if (p.categoria_real !== null) {
+      confere = '<div class="conferencia">Categoria real observada: ' + Util.selo(p.categoria_real) + ' ' +
+        (p.categoria_real === p.categoria_prevista ? '<span class="ok">&#10004; acertou</span>' : '<span class="errou">&#10008; errou</span>') + '</div>';
+    }
+    return cabecalho('Amanhã (previsão)', p.data_prevista, 'destaque') +
+      '<div class="valor"><div class="categoria nome-categoria" style="background:' + f.cor + ';color:' + f.texto + '">' + f.nome + '</div></div>' +
+      '<div class="rodape">' + (tend ? tend + '<br>' : '') +
+      '<b>Probabilidade de cada categoria:</b>' + (p.probabilidades ? barras(p.probabilidades, p.categoria_prevista) : '') +
+      'Modelo: <b>' + p.modelo + '</b> &middot; F1 macro no teste: ' + p.f1_modelo.toFixed(3) +
+      confere + '</div></div>';
   }
 
   function grafico(lista) {
     var L = 680, A = 240, mE = 40, mB = 30, mT = 10;
-    var maxAqi = Math.max.apply(null, lista.map(function (d) { return d.aqi; }));
+    var valores = lista.map(function (d) { return d.aqi; }).filter(function (v) { return v !== null; });
+    var maxAqi = valores.length ? Math.max.apply(null, valores) : 100;
     var topo = Math.max(100, Math.ceil(maxAqi / 100) * 100);
     var w = (L - mE - 10) / lista.length;
     var y = function (v) { return mT + (A - mT - mB) * (1 - v / topo); };
@@ -74,10 +115,12 @@
            '<text x="' + (mE - 5) + '" y="' + (y(g) + 3) + '" text-anchor="end" fill="#666">' + g + '</text>';
     }
     lista.forEach(function (d, i) {
-      var f = AQI.faixa(d.aqi);
       var x = mE + i * w;
-      s += '<rect x="' + (x + 1) + '" y="' + y(d.aqi) + '" width="' + Math.max(1, w - 2) + '" height="' + (y(0) - y(d.aqi)) +
-           '" fill="' + f.cor + '" stroke="#555" stroke-width="0.5"><title>' + Util.formataData(d.data) + ': ' + d.aqi + ' (' + f.nome + ')</title></rect>';
+      if (d.aqi !== null) {
+        var f = Util.faixa(d.categoria) || AQI.FAIXAS[AQI.indice(d.aqi)];
+        s += '<rect x="' + (x + 1) + '" y="' + y(d.aqi) + '" width="' + Math.max(1, w - 2) + '" height="' + (y(0) - y(d.aqi)) +
+             '" fill="' + f.cor + '" stroke="#555" stroke-width="0.5"><title>' + Util.formataData(d.data) + ': ' + Math.round(d.aqi) + ' (' + f.nome + ')</title></rect>';
+      }
       if (i % Math.ceil(lista.length / 8) === 0) {
         s += '<text x="' + (x + w / 2) + '" y="' + (A - mB + 14) + '" text-anchor="middle" fill="#666">' + Util.formataData(d.data).substr(0, 5) + '</text>';
       }
@@ -86,51 +129,52 @@
     return '<div id="grafico">' + s + '</div>';
   }
 
+  function resumo(hist) {
+    var valores = hist.map(function (d) { return d.aqi; }).filter(function (v) { return v !== null; });
+    if (!valores.length) return '<p class="pequeno">Sem medições de AQI no período.</p>';
+    var media = valores.reduce(function (a, b) { return a + b; }, 0) / valores.length;
+    return '<table class="dados"><tr><th>Média do período</th><th>Mínimo</th><th>Máximo</th><th>Dias acima de 200</th><th>Dias sem medição</th></tr>' +
+      '<tr><td class="num">' + Math.round(media) + ' ' + Util.selo(AQI.indice(media)) + '</td>' +
+      '<td class="num">' + Math.round(Math.min.apply(null, valores)) + '</td>' +
+      '<td class="num">' + Math.round(Math.max.apply(null, valores)) + '</td>' +
+      '<td class="num">' + valores.filter(function (v) { return v > 200; }).length + '</td>' +
+      '<td class="num">' + (hist.length - valores.length) + '</td></tr></table>';
+  }
+
   function consulta() {
     var cidade = selCidade.value, data = inpData.value, dias = parseInt(selDias.value, 10);
     alvo.innerHTML = '<div class="carregando">Consultando previsão para ' + cidade + '...</div>';
 
     Promise.all([AQI.previsao(cidade, data), AQI.historico(cidade, data, dias)]).then(function (r) {
       var p = r[0], hist = r[1];
-      var dif = p.aqi_previsto - p.aqi_atual;
-      var tend = dif > 0
-        ? '<span class="tendencia sobe">&#9650; +' + dif + '</span> em relação a hoje'
-        : dif < 0
-          ? '<span class="tendencia desce">&#9660; ' + dif + '</span> em relação a hoje'
-          : 'Sem variação em relação a hoje';
-      var fAmanha = AQI.faixa(p.aqi_previsto);
+      var fAmanha = Util.faixa(p.categoria_prevista);
 
       var html = '<h2>' + p.cidade + '</h2>' +
-        '<div class="paineis">' +
-          painel('AQI medido', p.data_base, p.aqi_atual, '', 'Valor observado na data de referência.') +
-          painel('AQI previsto (amanhã)', p.data_prevista, p.aqi_previsto, 'destaque',
-            tend + '<br>Modelo: <b>' + p.modelo + '</b>' +
-            (p.mae_modelo ? ' &middot; erro médio (MAE) &plusmn;' + p.mae_modelo : '')) +
-        '</div>' +
-        '<div class="aviso"><b>Recomendação para ' + Util.formataData(p.data_prevista) + ':</b> ' + fAmanha.saude + '</div>';
+        '<div class="paineis">' + painelHoje(p) + painelAmanha(p) + '</div>';
+      if (fAmanha) {
+        html += '<div class="aviso"><b>Recomendação para ' + Util.formataData(p.data_prevista) + ':</b> ' + fAmanha.saude + '</div>';
+      }
+      if (p.conjunto !== 'teste') {
+        html += '<div class="aviso">Esta data faz parte do período de <b>' + NOME_CONJUNTO[p.conjunto] +
+          '</b> do modelo (até 31/12/2019). Para avaliar o desempenho real, prefira datas de 2020, que o modelo não viu no treino.</div>';
+      }
 
-      var valores = hist.map(function (d) { return d.aqi; });
-      var media = Math.round(valores.reduce(function (a, b) { return a + b; }, 0) / valores.length);
-      html += '<h2>Histórico &mdash; ' + Util.formataData(hist[0].data) + ' a ' + Util.formataData(hist[hist.length - 1].data) + '</h2>' +
-        grafico(hist) +
-        '<table class="dados"><tr><th>Média do período</th><th>Mínimo</th><th>Máximo</th><th>Dias acima de 200</th></tr>' +
-        '<tr><td class="num">' + media + ' ' + Util.selo(media) + '</td>' +
-        '<td class="num">' + Math.min.apply(null, valores) + '</td>' +
-        '<td class="num">' + Math.max.apply(null, valores) + '</td>' +
-        '<td class="num">' + valores.filter(function (v) { return v > 200; }).length + '</td></tr></table>';
+      if (hist.length) {
+        html += '<h2>Histórico de ' + Util.formataData(hist[0].data) + ' a ' + Util.formataData(hist[hist.length - 1].data) + '</h2>' +
+          grafico(hist) + resumo(hist);
+      }
 
       html += '<h2>Poluentes medidos em ' + Util.formataData(p.data_base) + '</h2>' +
         '<table class="dados"><tr><th>Poluente</th><th>Concentração</th><th>Unidade</th></tr>';
       Object.keys(p.poluentes).forEach(function (k) {
-        var v = p.poluentes[k];
-        html += '<tr><td>' + k + '</td><td class="num">' + (v === null ? '&ndash;' : v.toFixed(2)) + '</td><td>' +
+        html += '<tr><td>' + k + '</td><td class="num">' + Util.numero(p.poluentes[k], 2) + '</td><td>' +
           (k === 'CO' ? 'mg/m&sup3;' : '&micro;g/m&sup3;') + '</td></tr>';
       });
       html += '</table>';
 
       html += '<h2>Registros diários</h2><table class="dados"><tr><th>Data</th><th>AQI</th><th>Categoria</th></tr>';
       hist.slice().reverse().forEach(function (d) {
-        html += '<tr><td>' + Util.formataData(d.data) + '</td><td class="num">' + d.aqi + '</td><td>' + Util.selo(d.aqi) + '</td></tr>';
+        html += '<tr><td>' + Util.formataData(d.data) + '</td><td class="num">' + Util.numero(d.aqi) + '</td><td>' + Util.selo(d.categoria) + '</td></tr>';
       });
       alvo.innerHTML = html + '</table>';
     }).catch(function (e) { Util.erro(alvo, e); });

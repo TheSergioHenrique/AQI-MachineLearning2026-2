@@ -14,7 +14,6 @@
 
   document.body.insertAdjacentHTML('afterbegin',
     '<div id="barra-topo"><div class="interna">' +
-      '<span class="esq">&#9733; Projeto Acadêmico &middot; Machine Learning 2026.2</span>' +
       '<span class="dir"><a href="#" id="fonte-menos">A-</a><a href="#" id="fonte-mais">A+</a>' +
       '<a href="sobre.html">Sobre</a></span>' +
     '</div></div>');
@@ -37,7 +36,7 @@
       '<a id="logo" href="index.html">' +
         '<span class="icone">AQI</span>' +
         '<span class="titulo">Previsão da Qualidade do Ar' +
-          '<small>Índice de Qualidade do Ar &mdash; previsão para o dia seguinte</small></span>' +
+          '<small>Índice de Qualidade do Ar previsto para o dia seguinte</small></span>' +
       '</a>' +
       '<form id="busca" action="index.html" method="get">' +
         '<input type="text" name="cidade" placeholder="Buscar cidade..."> ' +
@@ -50,7 +49,7 @@
 
   var legenda = AQI.FAIXAS.map(function (f, i) {
     var min = i === 0 ? 0 : AQI.FAIXAS[i - 1].max + 1;
-    var faixa = f.max === Infinity ? min + '+' : min + '&ndash;' + f.max;
+    var faixa = f.max === Infinity ? min + '+' : min + ' a ' + f.max;
     return '<tr><td class="cor" style="background:' + f.cor + '"></td><td>' + faixa + '</td><td>' + f.nome + '</td></tr>';
   }).join('');
 
@@ -62,10 +61,10 @@
       '</ul></div></div>' +
       '<div class="caixa"><h3>Escala do AQI (Índia)</h3><div class="corpo">' +
         '<table class="legenda-mini">' + legenda + '</table>' +
-        '<p class="pequeno">Fonte: CPCB &ndash; Central Pollution Control Board.</p>' +
+        '<p class="pequeno">Fonte: CPCB (Central Pollution Control Board).</p>' +
       '</div></div>' +
       '<div class="caixa"><h3>Base de dados</h3><div class="corpo pequeno">' +
-        '<b>Air Quality Data in India</b> (2015&ndash;2020)<br>' +
+        '<b>Air Quality Data in India</b> (2015 a 2020)<br>' +
         '26 cidades, 29.531 registros diários.<br>' +
         '<a href="https://www.kaggle.com/datasets/rohanrao/air-quality-data-in-india" target="_blank">Ver no Kaggle &raquo;</a>' +
       '</div></div>' +
@@ -80,7 +79,7 @@
         MENU.map(function (m) { return '<a href="' + m.href + '">' + m.texto + '</a>'; }).join('') +
       '</div>' +
       '<div class="info">' +
-        '<div class="esq"><b>Grupo 7</b> &mdash; Sergio Henrique, Maria Luisa, Arthur Pontes, Sofia Queiroz e Julia Rodrigues<br>' +
+        '<div class="esq"><b>Grupo 7</b>: Sergio Henrique, Maria Luisa, Arthur Pontes, Sofia Queiroz e Julia Rodrigues<br>' +
         'Projeto acadêmico de Machine Learning &middot; 2026</div>' +
       '</div>' +
     '</div>';

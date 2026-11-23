@@ -9,9 +9,9 @@ var AQI = (function () {
     { max: Infinity, nome: 'Severo',       cor: '#7e0023', texto: '#fff', saude: 'Afeta pessoas saudáveis e agrava quem já tem doenças.' }
   ];
 
-  function faixa(aqi) {
+  function indice(aqi) {
     for (var i = 0; i < FAIXAS.length; i++) {
-      if (aqi <= FAIXAS[i].max) return FAIXAS[i];
+      if (aqi <= FAIXAS[i].max) return i;
     }
   }
 
@@ -29,7 +29,11 @@ var AQI = (function () {
 
   function get(caminho) {
     return fetch(CONFIG.API_BASE_URL + caminho).then(function (r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
+      if (!r.ok) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          throw new Error(j.detail || 'HTTP ' + r.status);
+        });
+      }
       return r.json();
     });
   }
@@ -67,22 +71,36 @@ var AQI = (function () {
     return new Promise(function (ok) { setTimeout(function () { ok(valor); }, 250); });
   }
 
+  function previsaoSimulada(cidade, data) {
+    var hoje = aqiSimulado(cidade, data);
+    return indice(Math.round(hoje * 0.7 + aqiSimulado(cidade, somaDias(data, 1)) * 0.3));
+  }
+
   var mock = {
     cidades: function () {
       return atraso(Object.keys(MEDIANAS).map(function (c) { return { nome: c }; }));
     },
+    periodo: function () {
+      return atraso({ inicio: '2015-01-01', fim: '2020-07-01' });
+    },
     previsao: function (cidade, data) {
       var hoje = aqiSimulado(cidade, data);
-      var amanha = Math.round(hoje * 0.7 + aqiSimulado(cidade, somaDias(data, 1)) * 0.3);
+      var prevista = previsaoSimulada(cidade, data);
       var s = function (k) { return semente(cidade + data + k); };
+      var probs = FAIXAS.map(function (f, i) { return Math.exp(-2 * Math.abs(i - prevista)); });
+      var soma = probs.reduce(function (a, b) { return a + b; }, 0);
       return atraso({
         cidade: cidade,
         data_base: data,
         data_prevista: somaDias(data, 1),
         aqi_atual: hoje,
-        aqi_previsto: amanha,
-        modelo: 'Árvore de Regressão',
-        mae_modelo: 28.4,
+        categoria_atual: indice(hoje),
+        categoria_prevista: prevista,
+        probabilidades: probs.map(function (p) { return p / soma; }),
+        categoria_real: data < '2020-07-01' ? indice(aqiSimulado(cidade, somaDias(data, 1))) : null,
+        conjunto: data <= '2018-12-31' ? 'treino' : data <= '2019-12-31' ? 'validação' : 'teste',
+        modelo: 'Random Forest',
+        f1_modelo: 0.7249,
         poluentes: {
           'PM2.5': +(hoje * (0.45 + s('a') * 0.2)).toFixed(2),
           'PM10': +(hoje * (0.8 + s('b') * 0.3)).toFixed(2),
@@ -102,49 +120,52 @@ var AQI = (function () {
       var lista = [];
       for (var i = dias - 1; i >= 0; i--) {
         var d = somaDias(data, -i);
-        lista.push({ data: d, aqi: aqiSimulado(cidade, d) });
+        var aqi = aqiSimulado(cidade, d);
+        lista.push({ data: d, aqi: aqi, categoria: indice(aqi) });
       }
       return atraso(lista);
     },
+    mapa: function (data) {
+      return atraso(Object.keys(MEDIANAS).map(function (c) {
+        var aqi = aqiSimulado(c, data);
+        return { cidade: c, aqi_atual: aqi, categoria_atual: indice(aqi), categoria_prevista: previsaoSimulada(c, data) };
+      }));
+    },
     modelos: function () {
-      return atraso([
-        { modelo: 'Baseline (AQI amanhã = hoje)', mae: 34.1, rmse: 58.7 },
-        { modelo: 'Regressão Linear',             mae: 31.2, rmse: 52.3 },
-        { modelo: 'KNN Regressor',                mae: 30.5, rmse: 51.0 },
-        { modelo: 'Árvore de Regressão',          mae: 28.4, rmse: 49.6 },
-        { modelo: 'SVR',                          mae: 29.1, rmse: 50.2 }
-      ]);
-    }
-  };
-
-  mock.mapa = function (data) {
-    return mock.cidades().then(function (lista) {
-      return Promise.all(lista.map(function (c) { return mock.previsao(c.nome, data); }));
-    }).then(function (prevs) {
-      return prevs.map(function (p) {
-        return { cidade: p.cidade, aqi_atual: p.aqi_atual, aqi_previsto: p.aqi_previsto };
+      return atraso({
+        divisao: { treino_ate: '2018-12-31', validacao_ate: '2019-12-31' },
+        resultados: [
+          { modelo: 'Persistência (amanhã = hoje)', f1_macro: 0.6964, acc: 0.7739, bal_acc: 0.6989, adj: 0.9938, escolhido: false },
+          { modelo: 'Regressão Logística', f1_macro: 0.6893, acc: 0.7215, bal_acc: 0.7593, adj: 0.9917, escolhido: false },
+          { modelo: 'Árvore de Decisão',   f1_macro: 0.6913, acc: 0.7171, bal_acc: 0.7530, adj: 0.9887, escolhido: false },
+          { modelo: 'Random Forest',       f1_macro: 0.7249, acc: 0.7527, bal_acc: 0.7825, adj: 0.9958, escolhido: true },
+          { modelo: 'KNN',                 f1_macro: 0.6682, acc: 0.7259, bal_acc: 0.6727, adj: 0.9922, escolhido: false },
+          { modelo: 'SVM',                 f1_macro: 0.7309, acc: 0.7469, bal_acc: 0.7815, adj: 0.9924, escolhido: false }
+        ]
       });
-    });
+    }
   };
 
   var real = {
     cidades:   function () { return get('/cidades'); },
+    periodo:   function () { return get('/periodo'); },
     previsao:  function (c, d) { return get('/previsao?cidade=' + encodeURIComponent(c) + '&data=' + d); },
     historico: function (c, d, n) { return get('/historico?cidade=' + encodeURIComponent(c) + '&data=' + d + '&dias=' + n); },
-    modelos:   function () { return get('/modelos'); },
-    mapa:      function (d) { return get('/mapa?data=' + d); }
+    mapa:      function (d) { return get('/mapa?data=' + d); },
+    modelos:   function () { return get('/modelos'); }
   };
 
   var fonte = CONFIG.USE_MOCK ? mock : real;
 
   return {
     FAIXAS: FAIXAS,
-    faixa: faixa,
+    COORDENADAS: COORDENADAS,
+    indice: indice,
     cidades: fonte.cidades,
+    periodo: fonte.periodo,
     previsao: fonte.previsao,
     historico: fonte.historico,
     mapa: fonte.mapa,
-    COORDENADAS: COORDENADAS,
     modelos: fonte.modelos
   };
 })();

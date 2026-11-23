@@ -20,7 +20,6 @@ a:hover { color: #c0392b; }
   border-bottom: 1px solid #071b30;
 }
 #barra-topo .interna { width: 980px; margin: 0 auto; padding: 4px 10px; overflow: hidden; }
-#barra-topo .esq { float: left; }
 #barra-topo .dir { float: right; }
 #barra-topo a { color: #fff; text-decoration: none; margin-left: 10px; }
 #barra-topo a:hover { text-decoration: underline; }
@@ -352,3 +351,16 @@ fieldset .opcao { font-weight: normal; margin-right: 10px; }
   text-shadow: 1px 0 0 #fff, -1px 0 0 #fff, 0 1px 0 #fff, 0 -1px 0 #fff;
 }
 .leaflet-tooltip.rotulo-cidade:before { display: none; }
+
+.selo.sem-dados { background: #ddd; color: #666; font-weight: normal; }
+.painel .nome-categoria { font: bold 30px/1.1 Georgia, serif; }
+.painel .sem-valor { font: italic 14px Georgia, serif; color: #888; padding: 18px 0; }
+table.probs { width: 100%; border-collapse: collapse; margin: 4px 0 2px; }
+table.probs td { padding: 1px 3px; font-size: 11px; }
+table.probs td.rot { width: 82px; text-align: right; color: #444; }
+table.probs td.pct { width: 44px; text-align: right; font-family: "Courier New", monospace; }
+table.probs .barra { height: 11px; border: 1px solid rgba(0,0,0,.35); min-width: 1px; }
+table.probs tr.max td.rot { font-weight: bold; color: #000; }
+.conferencia { margin-top: 4px; }
+.conferencia .ok { color: #1e8a2e; font-weight: bold; }
+.conferencia .errou { color: #c0392b; font-weight: bold; }

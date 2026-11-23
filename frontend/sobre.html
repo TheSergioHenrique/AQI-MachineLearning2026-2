@@ -14,26 +14,27 @@
 
     <div id="principal">
       <h1 class="titulo-pagina">Sobre o Projeto</h1>
-      <p class="subtitulo">Projeto acadêmico de Machine Learning &mdash; Grupo 7.</p>
+      <p class="subtitulo">Projeto acadêmico de Machine Learning do Grupo 7.</p>
 
       <h2>Pergunta principal</h2>
       <p><i>"Conseguimos prever a qualidade do ar do dia seguinte usando o histórico de poluentes de uma cidade e o seu calendário?"</i></p>
 
       <h2>Base de dados</h2>
-      <p>Utilizamos a tabela <b>city_day</b> do dataset <a href="https://www.kaggle.com/datasets/rohanrao/air-quality-data-in-india" target="_blank">Air Quality Data in India (2015&ndash;2020)</a>,
+      <p>Utilizamos a tabela <b>city_day</b> do dataset <a href="https://www.kaggle.com/datasets/rohanrao/air-quality-data-in-india" target="_blank">Air Quality Data in India (2015 a 2020)</a>,
       com 29.531 linhas e 16 colunas. Cada linha é a medição média diária de uma cidade indiana em uma data, com a concentração de 12 poluentes, o AQI e sua categoria.</p>
 
       <h2>Metodologia</h2>
       <table class="dados">
         <tr><th style="width:170px">Etapa</th><th>Decisão</th></tr>
-        <tr><td>Variável-alvo</td><td>AQI do dia seguinte (regressão), obtido deslocando a coluna AQI em um dia para cada cidade.</td></tr>
-        <tr><td>Entradas</td><td>Poluentes do dia (PM2.5, PM10, NO, NO2, NOx, NH3, CO, SO2, O3, Benzeno, Tolueno), AQI atual, cidade, mês e dia da semana.</td></tr>
-        <tr><td>Colunas removidas</td><td>AQI_Bucket (vazamento de dados), Xileno (61% ausente) e a Date original.</td></tr>
-        <tr><td>Divisão treino/teste</td><td>Por data, nunca aleatória, para respeitar a ordem temporal.</td></tr>
-        <tr><td>Valores ausentes</td><td>Preenchidos com o valor do dia anterior da mesma cidade, depois da divisão.</td></tr>
-        <tr><td>Pré-processamento</td><td>One-Hot Encoding da cidade, padronização das variáveis numéricas e teste de transformação logarítmica no AQI.</td></tr>
-        <tr><td>Modelos</td><td>Regressão Linear, KNN Regressor, Árvore de Regressão e SVR, comparados com o baseline "amanhã = hoje".</td></tr>
-        <tr><td>Métricas</td><td>MAE e RMSE.</td></tr>
+        <tr><td>Variável-alvo</td><td>Categoria do AQI do dia seguinte (Bom, Satisfatório, Moderado, Ruim, Muito Ruim ou Severo): um problema de <b>classificação</b>.</td></tr>
+        <tr><td>Calendário</td><td>Cada cidade passa a ter uma linha por dia, para que "amanhã" seja sempre o dia seguinte de verdade.</td></tr>
+        <tr><td>Limpeza</td><td>Valores negativos viram ausentes; o Xileno é descartado (mais de 50% ausente); lacunas de até 3 dias são preenchidas com o último valor conhecido (só o passado).</td></tr>
+        <tr><td>Entradas</td><td>Poluentes de hoje, valores de 1 e 2 dias atrás e médias de 3 e 7 dias dos poluentes principais, categoria do AQI de hoje e de ontem, mês (seno/cosseno) e cidade.</td></tr>
+        <tr><td>Divisão</td><td>Temporal: treino até 2018, validação em 2019 e teste em 2020.</td></tr>
+        <tr><td>Pré-processamento</td><td>log1p, preenchimento pela mediana e RobustScaler nos números; One-Hot Encoding na cidade.</td></tr>
+        <tr><td>Modelos</td><td>Regressão Logística, Árvore de Decisão, Random Forest, KNN e SVM, com hiperparâmetros ajustados por algoritmo genético na validação.</td></tr>
+        <tr><td>Referência</td><td>Persistência: "a categoria de amanhã será igual à de hoje".</td></tr>
+        <tr><td>Métrica principal</td><td>F1 macro, por causa do desbalanceamento entre as categorias.</td></tr>
       </table>
 
       <h2>Principais achados da exploração</h2>
@@ -46,12 +47,21 @@
       </ul>
 
       <h2 id="modelos">Desempenho dos modelos</h2>
-      <p>Comparação dos algoritmos no conjunto de teste (separado por data).</p>
+      <p id="desc-modelos">Resultados no período de teste, que nenhum modelo viu durante o treino.</p>
       <div id="tabela-modelos"><div class="carregando">Carregando...</div></div>
       <ul>
-        <li><b>MAE</b> (Erro Absoluto Médio): em média, quantos pontos de AQI a previsão erra. Quanto menor, melhor.</li>
-        <li><b>RMSE</b> (Raiz do Erro Quadrático Médio): penaliza mais os erros grandes, como nos dias de poluição extrema.</li>
-        <li><b>Baseline</b>: a regra simples "o AQI de amanhã será igual ao de hoje". Um modelo só vale a pena se for melhor que ela.</li>
+        <li><b>F1 macro</b>: média do F1 de cada categoria, dando o mesmo peso às categorias raras (como Severo). É a métrica principal.</li>
+        <li><b>Acurácia</b>: fração de dias em que a categoria prevista foi exatamente a correta.</li>
+        <li><b>Acurácia balanceada</b>: média dos acertos por categoria.</li>
+        <li><b>Até 1 categoria</b>: fração de previsões que erraram por no máximo uma categoria (ex.: previu Moderado e foi Ruim).</li>
+        <li><b>Persistência</b>: repetir a categoria de hoje. Um modelo só vale a pena se superar essa regra simples.</li>
+      </ul>
+
+      <h2>Limitações</h2>
+      <ul>
+        <li>O período de teste (2020) inclui o lockdown da covid-19, com o ar bem mais limpo que o normal; depois de 25/03/2020 o modelo perde vantagem sobre a persistência.</li>
+        <li>As categorias extremas (Bom e Severo) são raras na base.</li>
+        <li>O modelo escolhido foi o melhor na validação (2019), e não no teste, para não usar o teste na escolha.</li>
       </ul>
 
       <h2 id="escala">Escala do AQI</h2>
@@ -92,20 +102,26 @@
   AQI.FAIXAS.forEach(function (f, i) {
     var min = i === 0 ? 0 : AQI.FAIXAS[i - 1].max + 1;
     var faixa = f.max === Infinity ? min + ' a 500' : min + ' a ' + f.max;
-    t.insertAdjacentHTML('beforeend', '<tr><td class="num">' + faixa + '</td><td>' + Util.selo(min) + '</td><td>' + f.saude + '</td></tr>');
+    t.insertAdjacentHTML('beforeend', '<tr><td class="num">' + faixa + '</td><td>' + Util.selo(i) + '</td><td>' + f.saude + '</td></tr>');
   });
 
   var alvo = document.getElementById('tabela-modelos');
-  AQI.modelos().then(function (lista) {
-    var melhor = lista.reduce(function (a, b) { return b.mae < a.mae ? b : a; });
-    var base = lista.filter(function (m) { return /baseline/i.test(m.modelo); })[0];
-    var html = '<table class="dados"><tr><th>Modelo</th><th>MAE</th><th>RMSE</th>' + (base ? '<th>Ganho sobre o baseline</th>' : '') + '</tr>';
+  AQI.modelos().then(function (r) {
+    var lista = r.resultados;
+    var base = lista.filter(function (m) { return /persist/i.test(m.modelo); })[0];
+    var pct = function (v) { return (v * 100).toFixed(1) + '%'; };
+    var html = '<table class="dados"><tr><th>Modelo</th><th>F1 macro</th><th>Acurácia</th><th>Acur. balanceada</th><th>Até 1 categoria</th>' +
+      (base ? '<th>F1 vs. persistência</th>' : '') + '</tr>';
     lista.forEach(function (m) {
-      html += '<tr' + (m === melhor ? ' class="melhor"' : '') + '><td>' + m.modelo + (m === melhor ? ' &#9733;' : '') + '</td>' +
-        '<td class="num">' + m.mae.toFixed(2) + '</td><td class="num">' + m.rmse.toFixed(2) + '</td>' +
-        (base ? '<td class="num">' + (m === base ? '&ndash;' : ((1 - m.mae / base.mae) * 100).toFixed(1) + '%') + '</td>' : '') + '</tr>';
+      var ganho = base && m !== base ? m.f1_macro - base.f1_macro : null;
+      html += '<tr' + (m.escolhido ? ' class="melhor"' : '') + '><td>' + m.modelo + (m.escolhido ? ' &#9733;' : '') + '</td>' +
+        '<td class="num">' + m.f1_macro.toFixed(3) + '</td><td class="num">' + pct(m.acc) + '</td>' +
+        '<td class="num">' + pct(m.bal_acc) + '</td><td class="num">' + pct(m.adj) + '</td>' +
+        (base ? '<td class="num">' + (ganho === null ? '-' : (ganho >= 0 ? '+' : '') + ganho.toFixed(3)) + '</td>' : '') + '</tr>';
     });
-    alvo.innerHTML = html + '</table><p class="pequeno">&#9733; Modelo com menor MAE, usado nas previsões do site.</p>';
+    alvo.innerHTML = html + '</table><p class="pequeno">&#9733; Modelo usado nas previsões do site (escolhido pelo melhor F1 macro na validação).</p>';
+    document.getElementById('desc-modelos').innerHTML = 'Resultados no período de teste (a partir de ' +
+      Util.formataData(Util.diaSeguinte(r.divisao.validacao_ate)) + '), que nenhum modelo viu durante o treino.';
   }).catch(function (e) { Util.erro(alvo, e); });
 })();
 </script>
