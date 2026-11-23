@@ -1,4 +1,4 @@
-# Previsão da Qualidade do Ar 🌫️
+# Previsão da Qualidade do Ar
 
 Este é o projeto do **Grupo 7** (Sergio Henrique, Maria Luisa, Arthur Pontes, Sofia Queiroz e Julia Rodrigues) para a disciplina de Machine Learning.
 
